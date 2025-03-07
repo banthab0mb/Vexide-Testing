@@ -13,9 +13,9 @@ icon = "cool-x"
 compress = true
 
 [dependencies]
+vexide = "0.7.0"
 autons = "0.1.0"
 evian = "0.2.0"
-vexide = "0.7.0"
 vexide-async = "0.1.9"
 vexide-core = "0.7.0"
 vexide-devices = "0.7.0"
