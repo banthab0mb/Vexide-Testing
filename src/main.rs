@@ -1,71 +1,86 @@
 #![no_main]
 #![no_std]
 
-// use core::cell::RefCell;
+extern crate alloc;
 
+use evian::prelude::*;
 use vexide::prelude::*;
 
-// use vexide_motorgroup::MotorGroup;
+use core::time::Duration;
+use evian::{
+    control::pid::{AngularPid, Pid},
+    differential::motion::Seeking,
+};
 
-/// 6-motor drivetrain robot with split arcade controls.
 struct Robot {
     controller: Controller,
-    left_motors: [Motor; 3],
-    right_motors: [Motor; 3],
+    drivetrain: Drivetrain<Differential, ParallelWheelTracking>,
 }
 
 impl Compete for Robot {
     async fn autonomous(&mut self) {
-        println!("Autonomous!");
+        let dt = &mut self.drivetrain;
+        let mut seeking = Seeking {
+            distance_controller: Pid::new(0.5, 0.0, 0.0, None),
+            angle_controller: AngularPid::new(0.5, 0.0, 0.0, None),
+            tolerances: Tolerances::new()
+                .error_tolerance(0.3)
+                .tolerance_duration(Duration::from_millis(100))
+                .timeout(Duration::from_secs(2)),
+        };
+
+        seeking.move_to_point(dt, (24.0, 24.0)).await;
     }
 
     async fn driver(&mut self) {
         loop {
-            let controller_state = self.controller.state().unwrap_or_default();
+            let controller = self.controller.state().unwrap_or_default();
 
-            // - Right stick's vertical motion dictates the robot's forward voltage.
-            // - Left stick's sideways motion dictates the robot's turning voltage.
-            let forward = controller_state.right_stick.x();
-            let turn = controller_state.left_stick.y();
+            _ = self.drivetrain.motors.set_voltages((
+                controller.left_stick.y() * Motor::V5_MAX_VOLTAGE,
+                controller.right_stick.y() * Motor::V5_MAX_VOLTAGE,
+            ));
 
-            // Move left motors.
-            for motor in self.left_motors.iter_mut() {
-                motor
-                    .set_voltage((forward + turn) * Motor::V5_MAX_VOLTAGE)
-                    .ok();
-            }
-
-            // Move right motors.
-            for motor in self.right_motors.iter_mut() {
-                motor
-                    .set_voltage((forward - turn) * Motor::V5_MAX_VOLTAGE)
-                    .ok();
-            }
-
-            sleep(Controller::UPDATE_INTERVAL).await;
+            sleep(Duration::from_millis(25)).await;
         }
     }
-
-    async fn disabled(&mut self) {
-        println!("Disabled!");
-    }
-
 }
 
 #[vexide::main]
 async fn main(peripherals: Peripherals) {
     Robot {
         controller: peripherals.primary_controller,
-        left_motors: [
-            Motor::new(peripherals.port_1, Gearset::Blue, Direction::Reverse),
-            Motor::new(peripherals.port_2, Gearset::Blue, Direction::Reverse),
-            Motor::new(peripherals.port_3, Gearset::Blue, Direction::Forward),
-        ],
-        right_motors: [
-            Motor::new(peripherals.port_4, Gearset::Blue, Direction::Forward),
-            Motor::new(peripherals.port_5, Gearset::Blue, Direction::Forward),
-            Motor::new(peripherals.port_6, Gearset::Blue, Direction::Reverse),
-        ],
+        drivetrain: Drivetrain::new(
+            Differential::new(
+                shared_motors![
+                    Motor::new(peripherals.port_2, Gearset::Blue, Direction::Reverse),
+                    Motor::new(peripherals.port_3, Gearset::Blue, Direction::Reverse),
+                    Motor::new(peripherals.port_7, Gearset::Blue, Direction::Reverse),
+                ],
+                shared_motors![
+                    Motor::new(peripherals.port_4, Gearset::Blue, Direction::Forward),
+                    Motor::new(peripherals.port_8, Gearset::Blue, Direction::Forward),
+                    Motor::new(peripherals.port_9, Gearset::Blue, Direction::Forward),
+                ],
+            ),
+            ParallelWheelTracking::new(
+                Vec2::default(),
+                90.0.deg(),
+                TrackingWheel::new(
+                    RotationSensor::new(peripherals.port_10, Direction::Forward),
+                    3.25,
+                    7.5,
+                    Some(36.0 / 48.0),
+                ),
+                TrackingWheel::new(
+                    RotationSensor::new(peripherals.port_11, Direction::Forward),
+                    3.25,
+                    7.5,
+                    Some(36.0 / 48.0),
+                ),
+                None,
+            ),
+        ),
     }
     .compete()
     .await;
