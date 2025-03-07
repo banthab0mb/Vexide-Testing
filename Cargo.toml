@@ -14,8 +14,8 @@ compress = true
 
 [dependencies]
 autons = "0.1.0"
-evian = { git = "https://github.com/vexide/evian.git" }
-vexide = { git = "https://github.com/vexide/vexide.git" }
+evian = "0.2.0"
+vexide = "0.7.0"
 vexide-async = "0.1.9"
 vexide-core = "0.7.0"
 vexide-devices = "0.7.0"
